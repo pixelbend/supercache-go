@@ -3,7 +3,7 @@ package natsprovider
 import (
 	"context"
 	"github.com/driftdev/polycache-go"
-	"github.com/driftdev/polycache-go/util"
+	"github.com/driftdev/polycache-go/pcerror"
 	"github.com/nats-io/nats.go"
 	"time"
 )
@@ -34,7 +34,7 @@ func (np *NATSProvider) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	if result == nil {
-		return "", util.PolyCacheErrorValueNotFound
+		return "", pcerror.PolyCacheErrorValueNotFound
 	}
 
 	return string(result.Value()), nil

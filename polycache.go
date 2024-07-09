@@ -8,6 +8,7 @@ import (
 type IPolyCache interface {
 	Set(ctx context.Context, key string, value string, expiry time.Duration) error
 	Get(ctx context.Context, key string) (string, error)
+
 	Delete(ctx context.Context, key string) error
 }
 
@@ -15,7 +16,7 @@ type PolyCache struct {
 	provider IPolyCache
 }
 
-func New(provider IPolyCache) *PolyCache {
+func NewCache(provider IPolyCache) *PolyCache {
 	return &PolyCache{provider: provider}
 }
 

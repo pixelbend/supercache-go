@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/driftdev/polycache-go"
-	"github.com/driftdev/polycache-go/util"
+	"github.com/driftdev/polycache-go/pcerror"
 	"github.com/redis/go-redis/v9"
 	"time"
 )
@@ -32,7 +32,7 @@ func (vkp *ValKeyProvider) Get(ctx context.Context, key string) (string, error) 
 	result, err := vkp.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return "", util.PolyCacheErrorValueNotFound
+			return "", pcerror.PolyCacheErrorValueNotFound
 		}
 		return "", err
 	}
