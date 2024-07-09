@@ -18,7 +18,7 @@ func New(client nats.KeyValue) polycache.IPolyCache {
 	}
 }
 
-func (np *NATSProvider) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+func (np *NATSProvider) Set(ctx context.Context, key string, value string, expiry *time.Duration) error {
 	_, err := np.client.PutString(key, value)
 	if err != nil {
 		return err

@@ -19,8 +19,14 @@ func New(client *redis.Client) polycache.IPolyCache {
 	}
 }
 
-func (vkp *ValKeyProvider) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
-	_, err := vkp.client.Set(ctx, key, value, expiry).Result()
+func (vkp *ValKeyProvider) Set(ctx context.Context, key string, value string, expiry *time.Duration) error {
+	exp := time.Duration(0)
+	
+	if expiry != nil {
+		exp = *expiry
+	}
+
+	_, err := vkp.client.Set(ctx, key, value, exp).Result()
 	if err != nil {
 		return err
 	}
