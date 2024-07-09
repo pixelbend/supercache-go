@@ -6,7 +6,7 @@ import (
 )
 
 type IPolyCache interface {
-	Set(ctx context.Context, key string, value string, expiry time.Duration) error
+	Set(ctx context.Context, key string, value string, expiry *time.Duration) error
 	Get(ctx context.Context, key string) (string, error)
 
 	Delete(ctx context.Context, key string) error
@@ -20,7 +20,7 @@ func NewCache(provider IPolyCache) *PolyCache {
 	return &PolyCache{provider: provider}
 }
 
-func (p *PolyCache) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+func (p *PolyCache) Set(ctx context.Context, key string, value string, expiry *time.Duration) error {
 	return p.provider.Set(ctx, key, value, expiry)
 }
 
