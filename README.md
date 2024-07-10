@@ -1,3 +1,3 @@
-# PolyCache Go
+# FuseCache Go
 
 Cache abstraction layer for Go which supports NATS and ValKey.
