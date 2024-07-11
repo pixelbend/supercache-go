@@ -30,10 +30,11 @@ func (vkp *ValKeyProvider) Set(ctx context.Context, key string, value string, ex
 
 func (vkp *ValKeyProvider) Get(ctx context.Context, key string) (string, error) {
 	result, err := vkp.client.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", pcerror.PolyCacheErrorValueNotFound
+	}
+
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return "", pcerror.PolyCacheErrorValueNotFound
-		}
 		return "", err
 	}
 
