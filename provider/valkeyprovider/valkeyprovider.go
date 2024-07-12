@@ -13,7 +13,9 @@ type ValKeyProvider struct {
 	client *redis.Client
 }
 
-func New(client *redis.Client) polycache.IPolyCache {
+var _ polycache.IPolyCache = (*ValKeyProvider)(nil)
+
+func New(client *redis.Client) *ValKeyProvider {
 	return &ValKeyProvider{
 		client: client,
 	}
