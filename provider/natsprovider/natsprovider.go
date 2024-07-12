@@ -18,7 +18,9 @@ type NATSProvider struct {
 	client nats.KeyValue
 }
 
-func New(client nats.KeyValue) polycache.IPolyCache {
+var _ polycache.IPolyCache = (*NATSProvider)(nil)
+
+func New(client nats.KeyValue) *NATSProvider {
 	return &NATSProvider{
 		client: client,
 	}

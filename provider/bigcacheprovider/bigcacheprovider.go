@@ -18,6 +18,8 @@ type BigCacheProvider struct {
 	client *bigcache.BigCache
 }
 
+var _ polycache.IPolyCache = (*BigCacheProvider)(nil)
+
 func New(client *bigcache.BigCache) polycache.IPolyCache {
 	return &BigCacheProvider{
 		client: client,
