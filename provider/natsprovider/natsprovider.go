@@ -26,23 +26,16 @@ func New(client nats.KeyValue) *NATSProvider {
 	}
 }
 
-func (np *NATSProvider) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
-	var expiration time.Time
-	if expiry != 0 {
-		expiration = time.Now().Add(expiry)
-	}
+func (np *NATSProvider) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
+	item := polycache.NewItem(data)
+	item.SetExpiration(expiry)
 
-	d := data{
-		Value:      value,
-		Expiration: expiration,
-	}
-
-	dataBytes, err := json.Marshal(d)
+	itemBytes, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
 
-	_, err = np.client.Put(key, dataBytes)
+	_, err = np.client.Put(key, itemBytes)
 	if err != nil {
 		return err
 	}
@@ -50,31 +43,35 @@ func (np *NATSProvider) Set(ctx context.Context, key string, value string, expir
 	return nil
 }
 
-func (np *NATSProvider) Get(ctx context.Context, key string) (string, error) {
+func (np *NATSProvider) Get(ctx context.Context, key string, data any) error {
 	result, err := np.client.Get(key)
 	if err != nil {
-		return "", err
+		return err
 	}
-
 	if result == nil {
-		return "", pcerror.PolyCacheErrorValueNotFound
+		return pcerror.PolyCacheErrorValueNotFound
 	}
 
-	var resultData data
-	err = json.Unmarshal(result.Value(), &resultData)
+	var item polycache.Item
+	err = json.Unmarshal(result.Value(), &item)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	if !resultData.Expiration.IsZero() && time.Now().After(resultData.Expiration) {
-		err := np.client.Delete(key)
+	if item.IsExpired() {
+		err := np.Delete(ctx, key)
 		if err != nil {
-			return "", err
+			return err
 		}
-		return "", pcerror.PolyCacheErrorValueNotFound
+		return pcerror.PolyCacheErrorValueNotFound
 	}
 
-	return resultData.Value, nil
+	err = item.ParseData(&data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (np *NATSProvider) Delete(ctx context.Context, key string) error {
