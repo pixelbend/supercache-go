@@ -9,11 +9,6 @@ import (
 	"time"
 )
 
-type data struct {
-	Value      string    `json:"value"`
-	Expiration time.Time `json:"expiration"`
-}
-
 type NATSBackend struct {
 	client nats.KeyValue
 }
@@ -49,7 +44,7 @@ func (nb *NATSBackend) Get(ctx context.Context, key string, data any) error {
 		return err
 	}
 	if result == nil {
-		return pcerror.PolyCacheErrorValueNotFound
+		return pcerror.ErrorValueNotFound
 	}
 
 	var item polycache.Item
@@ -63,7 +58,7 @@ func (nb *NATSBackend) Get(ctx context.Context, key string, data any) error {
 		if err != nil {
 			return err
 		}
-		return pcerror.PolyCacheErrorValueNotFound
+		return pcerror.ErrorValueNotFound
 	}
 
 	err = item.ParseData(&data)
