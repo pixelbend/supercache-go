@@ -1,3 +1,3 @@
 # PolyCache Go
 
-Cache abstraction layer for Go which supports NATS and ValKey.
+Cache abstraction layer for Go which supports NATS KV, ValKey and BigCache.
