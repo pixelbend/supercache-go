@@ -1,4 +1,4 @@
-package valkeyprovider
+package pcvalkey
 
 import (
 	"context"
@@ -10,19 +10,19 @@ import (
 	"time"
 )
 
-type ValKeyProvider struct {
+type ValKeyBackend struct {
 	client *redis.Client
 }
 
-var _ polycache.IPolyCache = (*ValKeyProvider)(nil)
+var _ polycache.IPolyCache = (*ValKeyBackend)(nil)
 
-func New(client *redis.Client) *ValKeyProvider {
-	return &ValKeyProvider{
+func NewValKeyBackend(client *redis.Client) *ValKeyBackend {
+	return &ValKeyBackend{
 		client: client,
 	}
 }
 
-func (vkp *ValKeyProvider) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
+func (vkb *ValKeyBackend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
 	item := polycache.NewItem(data)
 	item.SetExpiration(expiry)
 
@@ -31,7 +31,7 @@ func (vkp *ValKeyProvider) Set(ctx context.Context, key string, data any, expiry
 		return err
 	}
 
-	_, err = vkp.client.Set(ctx, key, itemBytes, expiry).Result()
+	_, err = vkb.client.Set(ctx, key, itemBytes, expiry).Result()
 	if err != nil {
 		return err
 	}
@@ -39,8 +39,8 @@ func (vkp *ValKeyProvider) Set(ctx context.Context, key string, data any, expiry
 	return nil
 }
 
-func (vkp *ValKeyProvider) Get(ctx context.Context, key string, data any) error {
-	result, err := vkp.client.Get(ctx, key).Bytes()
+func (vkb *ValKeyBackend) Get(ctx context.Context, key string, data any) error {
+	result, err := vkb.client.Get(ctx, key).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return pcerror.PolyCacheErrorValueNotFound
 	}
@@ -55,7 +55,7 @@ func (vkp *ValKeyProvider) Get(ctx context.Context, key string, data any) error 
 	}
 
 	if item.IsExpired() {
-		err := vkp.Delete(ctx, key)
+		err := vkb.Delete(ctx, key)
 		if err != nil {
 			return err
 		}
@@ -70,8 +70,8 @@ func (vkp *ValKeyProvider) Get(ctx context.Context, key string, data any) error 
 	return nil
 }
 
-func (vkp *ValKeyProvider) Delete(ctx context.Context, key string) error {
-	_, err := vkp.client.Del(ctx, key).Result()
+func (vkb *ValKeyBackend) Delete(ctx context.Context, key string) error {
+	_, err := vkb.client.Del(ctx, key).Result()
 	if err != nil {
 		return err
 	}

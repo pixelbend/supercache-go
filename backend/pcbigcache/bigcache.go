@@ -1,4 +1,4 @@
-package bigcacheprovider
+package pcbigcache
 
 import (
 	"context"
@@ -10,19 +10,19 @@ import (
 	"time"
 )
 
-type BigCacheProvider struct {
+type BigCacheBackend struct {
 	client *bigcache.BigCache
 }
 
-var _ polycache.IPolyCache = (*BigCacheProvider)(nil)
+var _ polycache.IPolyCache = (*BigCacheBackend)(nil)
 
-func New(client *bigcache.BigCache) polycache.IPolyCache {
-	return &BigCacheProvider{
+func NewBigCacheBackend(client *bigcache.BigCache) polycache.IPolyCache {
+	return &BigCacheBackend{
 		client: client,
 	}
 }
 
-func (bcp *BigCacheProvider) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
+func (bcb *BigCacheBackend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
 	item := polycache.NewItem(data)
 	item.SetExpiration(expiry)
 
@@ -31,7 +31,7 @@ func (bcp *BigCacheProvider) Set(ctx context.Context, key string, data any, expi
 		return err
 	}
 
-	err = bcp.client.Set(key, itemBytes)
+	err = bcb.client.Set(key, itemBytes)
 	if err != nil {
 		return err
 	}
@@ -39,8 +39,8 @@ func (bcp *BigCacheProvider) Set(ctx context.Context, key string, data any, expi
 	return nil
 }
 
-func (bcp *BigCacheProvider) Get(ctx context.Context, key string, data any) error {
-	result, err := bcp.client.Get(key)
+func (bcb *BigCacheBackend) Get(ctx context.Context, key string, data any) error {
+	result, err := bcb.client.Get(key)
 	if errors.Is(err, bigcache.ErrEntryNotFound) {
 		return pcerror.PolyCacheErrorValueNotFound
 	}
@@ -55,7 +55,7 @@ func (bcp *BigCacheProvider) Get(ctx context.Context, key string, data any) erro
 	}
 
 	if item.IsExpired() {
-		err := bcp.Delete(ctx, key)
+		err := bcb.Delete(ctx, key)
 		if err != nil {
 			return err
 		}
@@ -70,8 +70,8 @@ func (bcp *BigCacheProvider) Get(ctx context.Context, key string, data any) erro
 	return nil
 }
 
-func (bcp *BigCacheProvider) Delete(ctx context.Context, key string) error {
-	err := bcp.client.Delete(key)
+func (bcb *BigCacheBackend) Delete(ctx context.Context, key string) error {
+	err := bcb.client.Delete(key)
 	if err != nil {
 		return err
 	}
