@@ -10,19 +10,19 @@ import (
 	"time"
 )
 
-type BigCacheBackend struct {
+type Backend struct {
 	client *bigcache.BigCache
 }
 
-var _ polycache.IPolyCache = (*BigCacheBackend)(nil)
+var _ polycache.IPolyCache = (*Backend)(nil)
 
-func NewBigCacheBackend(client *bigcache.BigCache) polycache.IPolyCache {
-	return &BigCacheBackend{
+func NewBackend(client *bigcache.BigCache) polycache.IPolyCache {
+	return &Backend{
 		client: client,
 	}
 }
 
-func (bcb *BigCacheBackend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
+func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
 	item := polycache.NewItem(data)
 	item.SetExpiration(expiry)
 
@@ -31,7 +31,7 @@ func (bcb *BigCacheBackend) Set(ctx context.Context, key string, data any, expir
 		return err
 	}
 
-	err = bcb.client.Set(key, itemBytes)
+	err = b.client.Set(key, itemBytes)
 	if err != nil {
 		return err
 	}
@@ -39,10 +39,10 @@ func (bcb *BigCacheBackend) Set(ctx context.Context, key string, data any, expir
 	return nil
 }
 
-func (bcb *BigCacheBackend) Get(ctx context.Context, key string, data any) error {
-	result, err := bcb.client.Get(key)
+func (b *Backend) Get(ctx context.Context, key string, data any) error {
+	result, err := b.client.Get(key)
 	if errors.Is(err, bigcache.ErrEntryNotFound) {
-		return pcerror.PolyCacheErrorValueNotFound
+		return pcerror.ErrorValueNotFound
 	}
 	if err != nil {
 		return err
@@ -55,11 +55,11 @@ func (bcb *BigCacheBackend) Get(ctx context.Context, key string, data any) error
 	}
 
 	if item.IsExpired() {
-		err := bcb.Delete(ctx, key)
+		err := b.Delete(ctx, key)
 		if err != nil {
 			return err
 		}
-		return pcerror.PolyCacheErrorValueNotFound
+		return pcerror.ErrorValueNotFound
 	}
 
 	err = item.ParseData(&data)
@@ -70,8 +70,8 @@ func (bcb *BigCacheBackend) Get(ctx context.Context, key string, data any) error
 	return nil
 }
 
-func (bcb *BigCacheBackend) Delete(ctx context.Context, key string) error {
-	err := bcb.client.Delete(key)
+func (b *Backend) Delete(ctx context.Context, key string) error {
+	err := b.client.Delete(key)
 	if err != nil {
 		return err
 	}

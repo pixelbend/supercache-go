@@ -1,4 +1,4 @@
-package pcnats
+package pcnatskv
 
 import (
 	"context"
@@ -9,19 +9,19 @@ import (
 	"time"
 )
 
-type NATSBackend struct {
+type Backend struct {
 	client nats.KeyValue
 }
 
-var _ polycache.IPolyCache = (*NATSBackend)(nil)
+var _ polycache.IPolyCache = (*Backend)(nil)
 
-func NewNATSBackend(client nats.KeyValue) *NATSBackend {
-	return &NATSBackend{
+func NewBackend(client nats.KeyValue) *Backend {
+	return &Backend{
 		client: client,
 	}
 }
 
-func (nb *NATSBackend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
+func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
 	item := polycache.NewItem(data)
 	item.SetExpiration(expiry)
 
@@ -30,7 +30,7 @@ func (nb *NATSBackend) Set(ctx context.Context, key string, data any, expiry tim
 		return err
 	}
 
-	_, err = nb.client.Put(key, itemBytes)
+	_, err = b.client.Put(key, itemBytes)
 	if err != nil {
 		return err
 	}
@@ -38,8 +38,8 @@ func (nb *NATSBackend) Set(ctx context.Context, key string, data any, expiry tim
 	return nil
 }
 
-func (nb *NATSBackend) Get(ctx context.Context, key string, data any) error {
-	result, err := nb.client.Get(key)
+func (b *Backend) Get(ctx context.Context, key string, data any) error {
+	result, err := b.client.Get(key)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (nb *NATSBackend) Get(ctx context.Context, key string, data any) error {
 	}
 
 	if item.IsExpired() {
-		err := nb.Delete(ctx, key)
+		err := b.Delete(ctx, key)
 		if err != nil {
 			return err
 		}
@@ -69,8 +69,8 @@ func (nb *NATSBackend) Get(ctx context.Context, key string, data any) error {
 	return nil
 }
 
-func (nb *NATSBackend) Delete(ctx context.Context, key string) error {
-	err := nb.client.Purge(key)
+func (b *Backend) Delete(ctx context.Context, key string) error {
+	err := b.client.Purge(key)
 	if err != nil {
 		return err
 	}
