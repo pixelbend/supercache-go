@@ -1,29 +1,29 @@
-package pcvalkey
+package zcbigcache
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/driftdev/polycache-go"
-	"github.com/driftdev/polycache-go/pcerror"
-	"github.com/redis/go-redis/v9"
+	"github.com/allegro/bigcache/v3"
+	"github.com/driftdev/zencache"
+	"github.com/driftdev/zencache/zcerror"
 	"time"
 )
 
 type Backend struct {
-	client *redis.Client
+	client *bigcache.BigCache
 }
 
-var _ polycache.IPolyCache = (*Backend)(nil)
+var _ zencache.IZenCache = (*Backend)(nil)
 
-func NewBackend(client *redis.Client) *Backend {
+func NewBackend(client *bigcache.BigCache) *Backend {
 	return &Backend{
 		client: client,
 	}
 }
 
 func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
-	item := polycache.NewItem(data)
+	item := zencache.NewItem(data)
 	item.SetExpiration(expiry)
 
 	itemBytes, err := json.Marshal(item)
@@ -31,7 +31,7 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 		return err
 	}
 
-	_, err = b.client.Set(ctx, key, itemBytes, expiry).Result()
+	err = b.client.Set(key, itemBytes)
 	if err != nil {
 		return err
 	}
@@ -40,15 +40,15 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 }
 
 func (b *Backend) Get(ctx context.Context, key string, data any) error {
-	result, err := b.client.Get(ctx, key).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return pcerror.ErrorValueNotFound
+	result, err := b.client.Get(key)
+	if errors.Is(err, bigcache.ErrEntryNotFound) {
+		return zcerror.ErrorValueNotFound
 	}
 	if err != nil {
 		return err
 	}
 
-	var item polycache.Item
+	var item zencache.Item
 	err = json.Unmarshal(result, &item)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (b *Backend) Get(ctx context.Context, key string, data any) error {
 		if err != nil {
 			return err
 		}
-		return pcerror.ErrorValueNotFound
+		return zcerror.ErrorValueNotFound
 	}
 
 	err = item.ParseData(&data)
@@ -71,7 +71,7 @@ func (b *Backend) Get(ctx context.Context, key string, data any) error {
 }
 
 func (b *Backend) Delete(ctx context.Context, key string) error {
-	_, err := b.client.Del(ctx, key).Result()
+	err := b.client.Delete(key)
 	if err != nil {
 		return err
 	}

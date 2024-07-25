@@ -1,4 +1,4 @@
-module github.com/driftdev/polycache-go
+module github.com/driftdev/zencache
 
 go 1.22.5
 

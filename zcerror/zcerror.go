@@ -1,4 +1,4 @@
-package pcerror
+package zcerror
 
 import "errors"
 
