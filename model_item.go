@@ -1,4 +1,4 @@
-package omnicache
+package zencache
 
 import (
 	"encoding/json"

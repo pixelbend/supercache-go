@@ -1,12 +1,12 @@
-package ocbigcache
+package zcbigcache
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/allegro/bigcache/v3"
-	"github.com/driftdev/omnicache"
-	"github.com/driftdev/omnicache/ocerror"
+	"github.com/driftdev/zencache"
+	"github.com/driftdev/zencache/zcerror"
 	"time"
 )
 
@@ -14,7 +14,7 @@ type Backend struct {
 	client *bigcache.BigCache
 }
 
-var _ omnicache.IOmniCache = (*Backend)(nil)
+var _ zencache.IZenCache = (*Backend)(nil)
 
 func NewBackend(client *bigcache.BigCache) *Backend {
 	return &Backend{
@@ -23,7 +23,7 @@ func NewBackend(client *bigcache.BigCache) *Backend {
 }
 
 func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
-	item := omnicache.NewItem(data)
+	item := zencache.NewItem(data)
 	item.SetExpiration(expiry)
 
 	itemBytes, err := json.Marshal(item)
@@ -42,13 +42,13 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 func (b *Backend) Get(ctx context.Context, key string, data any) error {
 	result, err := b.client.Get(key)
 	if errors.Is(err, bigcache.ErrEntryNotFound) {
-		return ocerror.ErrorValueNotFound
+		return zcerror.ErrorValueNotFound
 	}
 	if err != nil {
 		return err
 	}
 
-	var item omnicache.Item
+	var item zencache.Item
 	err = json.Unmarshal(result, &item)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (b *Backend) Get(ctx context.Context, key string, data any) error {
 		if err != nil {
 			return err
 		}
-		return ocerror.ErrorValueNotFound
+		return zcerror.ErrorValueNotFound
 	}
 
 	err = item.ParseData(&data)
