@@ -1,4 +1,4 @@
-package polycache
+package zencache
 
 import (
 	"encoding/json"
