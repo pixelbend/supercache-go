@@ -1,29 +1,28 @@
-package zcvalkey
+package ocnatskv
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"github.com/driftdev/zencache"
-	"github.com/driftdev/zencache/zcerror"
-	"github.com/redis/go-redis/v9"
+	"github.com/driftdev/omnicache"
+	"github.com/driftdev/omnicache/ocerror"
+	"github.com/nats-io/nats.go"
 	"time"
 )
 
 type Backend struct {
-	client *redis.Client
+	client nats.KeyValue
 }
 
-var _ zencache.IZenCache = (*Backend)(nil)
+var _ omnicache.IOmniCache = (*Backend)(nil)
 
-func NewBackend(client *redis.Client) *Backend {
+func NewBackend(client nats.KeyValue) *Backend {
 	return &Backend{
 		client: client,
 	}
 }
 
 func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
-	item := zencache.NewItem(data)
+	item := omnicache.NewItem(data)
 	item.SetExpiration(expiry)
 
 	itemBytes, err := json.Marshal(item)
@@ -31,7 +30,7 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 		return err
 	}
 
-	_, err = b.client.Set(ctx, key, itemBytes, expiry).Result()
+	_, err = b.client.Put(key, itemBytes)
 	if err != nil {
 		return err
 	}
@@ -40,16 +39,16 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 }
 
 func (b *Backend) Get(ctx context.Context, key string, data any) error {
-	result, err := b.client.Get(ctx, key).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return zcerror.ErrorValueNotFound
-	}
+	result, err := b.client.Get(key)
 	if err != nil {
 		return err
 	}
+	if result == nil {
+		return ocerror.ErrorValueNotFound
+	}
 
-	var item zencache.Item
-	err = json.Unmarshal(result, &item)
+	var item omnicache.Item
+	err = json.Unmarshal(result.Value(), &item)
 	if err != nil {
 		return err
 	}
@@ -59,7 +58,7 @@ func (b *Backend) Get(ctx context.Context, key string, data any) error {
 		if err != nil {
 			return err
 		}
-		return zcerror.ErrorValueNotFound
+		return ocerror.ErrorValueNotFound
 	}
 
 	err = item.ParseData(&data)
@@ -71,7 +70,7 @@ func (b *Backend) Get(ctx context.Context, key string, data any) error {
 }
 
 func (b *Backend) Delete(ctx context.Context, key string) error {
-	_, err := b.client.Del(ctx, key).Result()
+	err := b.client.Purge(key)
 	if err != nil {
 		return err
 	}

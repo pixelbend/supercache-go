@@ -1,4 +1,4 @@
-package zcerror
+package ocerror
 
 import "errors"
 
