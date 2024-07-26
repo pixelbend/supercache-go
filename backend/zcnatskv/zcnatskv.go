@@ -6,6 +6,7 @@ import (
 	"github.com/driftdev/zencache"
 	"github.com/driftdev/zencache/zcerror"
 	"github.com/nats-io/nats.go"
+	"strings"
 	"time"
 )
 
@@ -30,7 +31,7 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 		return err
 	}
 
-	_, err = b.client.Put(key, itemBytes)
+	_, err = b.client.Put(formatKey(key), itemBytes)
 	if err != nil {
 		return err
 	}
@@ -39,7 +40,7 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 }
 
 func (b *Backend) Get(ctx context.Context, key string, data any) error {
-	result, err := b.client.Get(key)
+	result, err := b.client.Get(formatKey(key))
 	if err != nil {
 		return err
 	}
@@ -70,10 +71,14 @@ func (b *Backend) Get(ctx context.Context, key string, data any) error {
 }
 
 func (b *Backend) Delete(ctx context.Context, key string) error {
-	err := b.client.Purge(key)
+	err := b.client.Purge(formatKey(key))
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func formatKey(key string) string {
+	return strings.ReplaceAll(key, ":", ".")
 }
