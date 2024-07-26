@@ -55,10 +55,9 @@ func (b *Backend) Get(ctx context.Context, key string, data any) error {
 	}
 
 	if item.IsExpired() {
-		err := b.Delete(ctx, key)
-		if err != nil {
-			return err
-		}
+		go func() {
+			_ = b.Delete(ctx, key)
+		}()
 		return zcerror.ErrorValueNotFound
 	}
 
