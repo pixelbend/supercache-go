@@ -1,4 +1,4 @@
-package zcvalkey
+package zcredis
 
 import (
 	"context"
