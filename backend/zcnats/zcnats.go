@@ -1,4 +1,4 @@
-package zcnatskv
+package zcnats
 
 import (
 	"context"
