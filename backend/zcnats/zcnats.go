@@ -3,6 +3,7 @@ package zcnats
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/driftdev/zencache"
 	"github.com/driftdev/zencache/zcerror"
 	"github.com/nats-io/nats.go"
@@ -41,11 +42,11 @@ func (b *Backend) Set(ctx context.Context, key string, data any, expiry time.Dur
 
 func (b *Backend) Get(ctx context.Context, key string, data any) error {
 	result, err := b.client.Get(formatKey(key))
+	if errors.Is(nats.ErrKeyNotFound, err) {
+		return zcerror.ErrorValueNotFound
+	}
 	if err != nil {
 		return err
-	}
-	if result == nil {
-		return zcerror.ErrorValueNotFound
 	}
 
 	var item zencache.Item
