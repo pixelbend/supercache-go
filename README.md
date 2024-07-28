@@ -1,3 +1,3 @@
 # ZenCache
 
-A Cache abstraction layer for Go which works with Redis and RedisCluster.
+A Cache package for Go which works with Redis and RedisCluster.
