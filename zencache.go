@@ -2,31 +2,67 @@ package zencache
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"github.com/driftdev/zencache/zcerror"
+	"github.com/redis/go-redis/v9"
 	"time"
 )
 
-type IZenCache interface {
-	Set(ctx context.Context, key string, data any, expiry time.Duration) error
-	Get(ctx context.Context, key string, data any) error
-	Delete(ctx context.Context, key string) error
+type RedisClient interface {
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+	Get(ctx context.Context, key string) *redis.StringCmd
+	Del(ctx context.Context, keys ...string) *redis.IntCmd
 }
 
 type ZenCache struct {
-	provider IZenCache
+	client RedisClient
 }
 
-func NewCache(provider IZenCache) *ZenCache {
-	return &ZenCache{provider: provider}
+func NewCache(client RedisClient) *ZenCache {
+	return &ZenCache{client: client}
 }
 
-func (p *ZenCache) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
-	return p.provider.Set(ctx, key, data, expiry)
+type Backend struct {
+	client *redis.Client
 }
 
-func (p *ZenCache) Get(ctx context.Context, key string, data any) error {
-	return p.provider.Get(ctx, key, data)
+func (zc *ZenCache) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	_, err = zc.client.Set(ctx, key, dataBytes, expiry).Result()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (p *ZenCache) Delete(ctx context.Context, key string) error {
-	return p.provider.Delete(ctx, key)
+func (zc *ZenCache) Get(ctx context.Context, key string, data any) error {
+	dataBytes, err := zc.client.Get(ctx, key).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return zcerror.ErrorValueNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(dataBytes, &data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (zc *ZenCache) Delete(ctx context.Context, key string) error {
+	_, err := zc.client.Del(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
