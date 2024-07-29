@@ -2,67 +2,31 @@ package zencache
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"github.com/driftdev/zencache/zcerror"
-	"github.com/redis/go-redis/v9"
 	"time"
 )
 
-type RedisClient interface {
-	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
-	Get(ctx context.Context, key string) *redis.StringCmd
-	Del(ctx context.Context, keys ...string) *redis.IntCmd
+type CacheProvider interface {
+	Set(ctx context.Context, key string, data any, expiry time.Duration) error
+	Get(ctx context.Context, key string, data any) error
+	Delete(ctx context.Context, keys ...string) error
 }
 
-type ZenCache struct {
-	client RedisClient
+type Cache struct {
+	cache CacheProvider
 }
 
-func NewCache(client RedisClient) *ZenCache {
-	return &ZenCache{client: client}
+func NewCache(cache CacheProvider) *Cache {
+	return &Cache{cache: cache}
 }
 
-type Backend struct {
-	client *redis.Client
+func (c *Cache) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
+	return c.cache.Set(ctx, key, data, expiry)
 }
 
-func (zc *ZenCache) Set(ctx context.Context, key string, data any, expiry time.Duration) error {
-	dataBytes, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	_, err = zc.client.Set(ctx, key, dataBytes, expiry).Result()
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (c *Cache) Get(ctx context.Context, key string, data any) error {
+	return c.cache.Get(ctx, key, data)
 }
 
-func (zc *ZenCache) Get(ctx context.Context, key string, data any) error {
-	dataBytes, err := zc.client.Get(ctx, key).Bytes()
-	if errors.Is(err, redis.Nil) {
-		return zcerror.ErrorValueNotFound
-	}
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(dataBytes, &data)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (zc *ZenCache) Delete(ctx context.Context, keys ...string) error {
-	_, err := zc.client.Del(ctx, keys...).Result()
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (c *Cache) Delete(ctx context.Context, keys ...string) error {
+	return c.cache.Delete(ctx, keys...)
 }
