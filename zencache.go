@@ -58,8 +58,8 @@ func (zc *ZenCache) Get(ctx context.Context, key string, data any) error {
 	return nil
 }
 
-func (zc *ZenCache) Delete(ctx context.Context, key string) error {
-	_, err := zc.client.Del(ctx, key).Result()
+func (zc *ZenCache) Delete(ctx context.Context, keys ...string) error {
+	_, err := zc.client.Del(ctx, keys...).Result()
 	if err != nil {
 		return err
 	}
