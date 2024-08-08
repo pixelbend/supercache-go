@@ -8,17 +8,11 @@ import (
 	"time"
 )
 
-type RedisClient interface {
-	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
-	Get(ctx context.Context, key string) *redis.StringCmd
-	Del(ctx context.Context, keys ...string) *redis.IntCmd
-}
-
 type Cache struct {
-	client RedisClient
+	client redis.UniversalClient
 }
 
-func NewCache(cache RedisClient) *Cache {
+func NewCache(cache redis.UniversalClient) *Cache {
 	return &Cache{client: cache}
 }
 
