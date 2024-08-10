@@ -180,7 +180,7 @@ func (c *Cache) RawSet(ctx context.Context, key string, value string, expire tim
 func (c *Cache) LockForUpdate(ctx context.Context, key string, owner string) error {
 	lockUntil := math.Pow10(10)
 	res, err := runLua(ctx, c.client, lock, []string{key}, []interface{}{owner, lockUntil})
-	if err == nil && res != "LOCKED" {
+	if err == nil && res != locked {
 		return fmt.Errorf("%s has been locked by %s", key, res)
 	}
 	return err
