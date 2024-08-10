@@ -57,7 +57,7 @@ func NewCache(cache redis.UniversalClient, options Options) *Cache {
 	}
 }
 
-func (c *Cache) Set(ctx context.Context, key string, value string, expire time.Duration) error {
+func (c *Cache) Set(ctx context.Context, key string, value []byte, expire time.Duration) error {
 	_, err := c.client.Set(ctx, key, value, expire).Result()
 	if err != nil {
 		return err
@@ -66,16 +66,8 @@ func (c *Cache) Set(ctx context.Context, key string, value string, expire time.D
 	return nil
 }
 
-func (c *Cache) Get(ctx context.Context, key string) (string, error) {
-	value, err := c.client.Get(ctx, key).Result()
-	if errors.Is(err, redis.Nil) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-
-	return value, nil
+func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
+	return c.client.Get(ctx, key).Bytes()
 }
 
 func (c *Cache) Delete(ctx context.Context, keys ...string) error {
@@ -87,7 +79,7 @@ func (c *Cache) Delete(ctx context.Context, keys ...string) error {
 	return nil
 }
 
-func (c *Cache) FetchSingle(ctx context.Context, key string, expire time.Duration, fn func() (string, error)) (string, error) {
+func (c *Cache) FetchSingle(ctx context.Context, key string, expire time.Duration, fn func() ([]byte, error)) ([]byte, error) {
 	ex := expire - c.Options.Delay - time.Duration(rand.Float64()*c.Options.RandomExpireAdjustment*float64(expire))
 	v, err, _ := c.group.Do(key, func() (interface{}, error) {
 		if c.Options.DisableCacheRead {
@@ -98,7 +90,7 @@ func (c *Cache) FetchSingle(ctx context.Context, key string, expire time.Duratio
 		return c.weakFetch(ctx, key, ex, fn)
 	})
 
-	return v.(string), err
+	return v.([]byte), err
 }
 
 func (c *Cache) TagAsDeletedSingle(ctx context.Context, key string) error {
@@ -129,7 +121,7 @@ func (c *Cache) TagAsDeletedSingle(ctx context.Context, key string) error {
 	return luaFn(c.client)
 }
 
-func (c *Cache) FetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int]string, error)) (map[int]string, error) {
+func (c *Cache) FetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
 	if c.Options.DisableCacheRead {
 		return fn(c.keysIndex(keys))
 	} else if c.Options.StrongConsistency {
@@ -168,7 +160,7 @@ func (c *Cache) RawGet(ctx context.Context, key string) (string, error) {
 	return c.client.HGet(ctx, key, "value").Result()
 }
 
-func (c *Cache) RawSet(ctx context.Context, key string, value string, expire time.Duration) error {
+func (c *Cache) RawSet(ctx context.Context, key string, value []byte, expire time.Duration) error {
 	err := c.client.HSet(ctx, key, "value", value).Err()
 	if err == nil {
 		err = c.client.Expire(ctx, key, expire).Err()
@@ -199,21 +191,21 @@ func (c *Cache) luaGet(ctx context.Context, key string, owner string) ([]interfa
 	return res.([]interface{}), nil
 }
 
-func (c *Cache) luaSet(ctx context.Context, key string, value string, expire int, owner string) error {
+func (c *Cache) luaSet(ctx context.Context, key string, value []byte, expire int, owner string) error {
 	_, err := runLua(ctx, c.client, setSingle, []string{key}, []interface{}{value, owner, expire})
 	return err
 }
 
-func (c *Cache) fetchNew(ctx context.Context, key string, expire time.Duration, owner string, fn func() (string, error)) (string, error) {
+func (c *Cache) fetchNew(ctx context.Context, key string, expire time.Duration, owner string, fn func() ([]byte, error)) ([]byte, error) {
 	result, err := fn()
 	if err != nil {
 		_ = c.UnlockForUpdate(ctx, key, owner)
-		return "", err
+		return nil, err
 	}
-	if result == "" {
+	if result == nil {
 		if c.Options.EmptyExpire == 0 { // if empty expire is 0, then delete the key
 			err = c.client.Del(ctx, key).Err()
-			return "", err
+			return nil, err
 		}
 		expire = c.Options.EmptyExpire
 	}
@@ -221,22 +213,22 @@ func (c *Cache) fetchNew(ctx context.Context, key string, expire time.Duration, 
 	return result, err
 }
 
-func (c *Cache) weakFetch(ctx context.Context, key string, expire time.Duration, fn func() (string, error)) (string, error) {
+func (c *Cache) weakFetch(ctx context.Context, key string, expire time.Duration, fn func() ([]byte, error)) ([]byte, error) {
 	owner := shortuuid.New()
 	r, err := c.luaGet(ctx, key, owner)
 	for err == nil && r[0] == nil && r[1].(string) != locked {
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		case <-time.After(c.Options.LockSleep):
 		}
 		r, err = c.luaGet(ctx, key, owner)
 	}
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if r[1] != locked {
-		return r[0].(string), nil
+		return r[0].([]byte), nil
 	}
 	if r[0] == nil {
 		return c.fetchNew(ctx, key, expire, owner, fn)
@@ -244,25 +236,25 @@ func (c *Cache) weakFetch(ctx context.Context, key string, expire time.Duration,
 	go withRecover(func() {
 		_, _ = c.fetchNew(ctx, key, expire, owner, fn)
 	})
-	return r[0].(string), nil
+	return r[0].([]byte), nil
 }
 
-func (c *Cache) strongFetch(ctx context.Context, key string, expire time.Duration, fn func() (string, error)) (string, error) {
+func (c *Cache) strongFetch(ctx context.Context, key string, expire time.Duration, fn func() ([]byte, error)) ([]byte, error) {
 	owner := shortuuid.New()
 	r, err := c.luaGet(ctx, key, owner)
 	for err == nil && r[1] != nil && r[1] != locked { // locked by other
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		case <-time.After(c.Options.LockSleep):
 		}
 		r, err = c.luaGet(ctx, key, owner)
 	}
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if r[1] != locked { // normal value
-		return r[0].(string), nil
+		return r[0].([]byte), nil
 	}
 	return c.fetchNew(ctx, key, expire, owner, fn)
 }
@@ -280,7 +272,7 @@ func (c *Cache) luaGetBatch(ctx context.Context, keys []string, owner string) ([
 	return res.([]interface{}), nil
 }
 
-func (c *Cache) luaSetBatch(ctx context.Context, keys []string, values []string, expires []int, owner string) error {
+func (c *Cache) luaSetBatch(ctx context.Context, keys []string, values [][]byte, expires []int, owner string) error {
 	var vals = make([]interface{}, 0, 2+len(values))
 	vals = append(vals, owner)
 	for _, v := range values {
@@ -293,7 +285,7 @@ func (c *Cache) luaSetBatch(ctx context.Context, keys []string, values []string,
 	return err
 }
 
-func (c *Cache) fetchBatch(ctx context.Context, keys []string, indexes []int, expire time.Duration, owner string, fn func(indexes []int) (map[int]string, error)) (map[int]string, error) {
+func (c *Cache) fetchBatch(ctx context.Context, keys []string, indexes []int, expire time.Duration, owner string, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			debug.PrintStack()
@@ -308,17 +300,17 @@ func (c *Cache) fetchBatch(ctx context.Context, keys []string, indexes []int, ex
 	}
 
 	if data == nil {
-		data = make(map[int]string)
+		data = make(map[int][]byte)
 	}
 
 	var batchKeys []string
-	var batchValues []string
+	var batchValues [][]byte
 	var batchExpires []int
 
 	for _, idx := range indexes {
 		v := data[idx]
 		ex := expire - c.Options.Delay - time.Duration(rand.Float64()*c.Options.RandomExpireAdjustment*float64(expire))
-		if v == "" {
+		if v == nil {
 			if c.Options.EmptyExpire == 0 { // if empty expire is 0, then delete the key
 				_ = c.client.Del(ctx, keys[idx]).Err()
 				continue
@@ -346,12 +338,12 @@ func (c *Cache) keysIndex(keys []string) (indexes []int) {
 
 type pair struct {
 	idx  int
-	data string
+	data []byte
 	err  error
 }
 
-func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int]string, error)) (map[int]string, error) {
-	var result = make(map[int]string)
+func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
+	var result = make(map[int][]byte)
 	owner := shortuuid.New()
 	var toGet, toFetch, toFetchAsync []int
 
@@ -377,7 +369,7 @@ func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.D
 			// fallthrough with old data
 		} // else new data
 
-		result[i] = r[0].(string)
+		result[i] = r[0].([]byte)
 	}
 
 	if len(toFetchAsync) > 0 {
@@ -420,18 +412,18 @@ func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.D
 					r, err = c.luaGet(ctx, keys[i], owner)
 				}
 				if err != nil {
-					ch <- pair{idx: i, data: "", err: err}
+					ch <- pair{idx: i, data: nil, err: err}
 					return
 				}
 				if r[1] != locked { // normal value
-					ch <- pair{idx: i, data: r[0].(string), err: nil}
+					ch <- pair{idx: i, data: r[0].([]byte), err: nil}
 					return
 				}
 				if r[0] == nil {
-					ch <- pair{idx: i, data: "", err: errNeedFetch}
+					ch <- pair{idx: i, data: nil, err: errNeedFetch}
 					return
 				}
-				ch <- pair{idx: i, data: "", err: errNeedAsyncFetch}
+				ch <- pair{idx: i, data: nil, err: errNeedAsyncFetch}
 			}(idx)
 		}
 		wg.Wait()
@@ -474,8 +466,8 @@ func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.D
 	return result, nil
 }
 
-func (c *Cache) strongFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int]string, error)) (map[int]string, error) {
-	var result = make(map[int]string)
+func (c *Cache) strongFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
+	var result = make(map[int][]byte)
 	owner := shortuuid.New()
 	var toGet, toFetch []int
 
@@ -487,7 +479,7 @@ func (c *Cache) strongFetchBatch(ctx context.Context, keys []string, expire time
 	for i, v := range rs {
 		r := v.([]interface{})
 		if r[1] == nil { // normal value
-			result[i] = r[0].(string)
+			result[i] = r[0].([]byte)
 			continue
 		}
 
@@ -532,15 +524,15 @@ func (c *Cache) strongFetchBatch(ctx context.Context, keys []string, expire time
 					r, err = c.luaGet(ctx, keys[i], owner)
 				}
 				if err != nil {
-					ch <- pair{idx: i, data: "", err: err}
+					ch <- pair{idx: i, data: nil, err: err}
 					return
 				}
 				if r[1] != locked { // normal value
-					ch <- pair{idx: i, data: r[0].(string), err: nil}
+					ch <- pair{idx: i, data: r[0].([]byte), err: nil}
 					return
 				}
 				// locked for update
-				ch <- pair{idx: i, data: "", err: errNeedFetch}
+				ch <- pair{idx: i, data: nil, err: errNeedFetch}
 			}(idx)
 		}
 		wg.Wait()
