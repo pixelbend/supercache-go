@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const locked = "locked"
+const locked = "LOCKED"
 
 type Options struct {
 	Delay                  time.Duration
