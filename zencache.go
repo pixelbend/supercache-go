@@ -147,27 +147,10 @@ func NewCache(cache redis.UniversalClient, options Options) *Cache {
 //
 // Example:
 //
-//		type Data struct {
-//			Id    string `json:"id"`
-//			Name  string `json:"name"`
-//			Email string `json:"email"`
-//		}
-//
-//		data := Data{
-//			Id: "user_01J4YHWG45SC7VW684TZB2SZ7K",
-//			Name: "user_1234",
-//			Email: "user@gmail.com",
-//		}
-//
-//		dataBytes, err := json.Marshal(data)
-//	 	if err != nil {
-//		    log.Fatalf("Failed to set cache: %v", err)
-//		}
-//
-//		err := Set(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K", dataBytes, 10*time.Minute)
-//		if err != nil {
-//		    log.Fatalf("Failed to set cache: %v", err)
-//		}
+//	err := Set(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K", []byte("example_value"), 10*time.Minute)
+//	if err != nil {
+//	    log.Fatalf("Failed to set cache: %v", err)
+//	}
 func (c *Cache) Set(ctx context.Context, key string, value []byte, expire time.Duration) error {
 	_, err := c.client.Set(ctx, key, value, expire).Result()
 	if err != nil {
@@ -242,6 +225,38 @@ func (c *Cache) Delete(ctx context.Context, keys ...string) error {
 	return nil
 }
 
+// FetchSingle retrieves a value from the cache, or if not present, retrieves the value using the provided function `fn`
+// and stores it in the cache. This method ensures that only one request for the given key is processed at a time
+// (using the singleflight pattern) to avoid duplicate work.
+//
+// The method supports both strong and weak consistency modes, and the choice between them is controlled by the `Options.StrongConsistency`
+// configuration. Additionally, cache reads can be disabled globally through the `Options.DisableCacheRead`.
+//
+// The expiration time for the cache entry is adjusted using the configured `Options.Delay` and `Options.RandomExpireAdjustment`
+// options to help mitigate issues like cache avalanches.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - key: The unique identifier for the cache entry (e.g., cache key).
+//   - expire: The duration after which the cache entry will expire and be automatically deleted.
+//   - fn: A function that computes the value to be cached if it is not already present.
+//     This function is called only if the cache miss occurs or if the cache read is disabled.
+//
+// Returns:
+//   - []byte: The data retrieved from the cache or computed by the function `fn`, represented as a slice of bytes.
+//   - error: If the cache operation or the function `fn` fails, an error is returned.
+//
+// Example:
+//
+//	data, err := FetchSingle(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K", 10*time.Minute, func() ([]byte, error) {
+//	    // Simulate data retrieval, e.g., from a database
+//	    return fetchDataFromDatabase("user_01J4YHWG45SC7VW684TZB2SZ7K")
+//	})
+//	if err != nil {
+//	    log.Fatalf("Failed to fetch data: %v", err)
+//	}
+//
+//	log.Printf("Fetched data: %s", string(data))
 func (c *Cache) FetchSingle(ctx context.Context, key string, expire time.Duration, fn func() ([]byte, error)) ([]byte, error) {
 	ex := expire - c.Options.Delay - time.Duration(rand.Float64()*c.Options.RandomExpireAdjustment*float64(expire))
 	v, err, _ := c.group.Do(key, func() (interface{}, error) {
@@ -256,6 +271,35 @@ func (c *Cache) FetchSingle(ctx context.Context, key string, expire time.Duratio
 	return v.([]byte), err
 }
 
+// TagAsDeletedSingle marks a cache entry as deleted by setting a delayed deletion in Redis.
+// The actual deletion is performed using a Lua script that delays the removal by the duration specified
+// in the `Options.Delay` field. This is useful for scenarios where you want to invalidate a cache entry
+// without immediately removing it, allowing other systems to recognize the deletion and take appropriate action.
+//
+// If cache deletion is disabled using `Options.DisableCacheDelete`, the method returns immediately without
+// performing any operation.
+//
+// The method also supports waiting for a specified number of replicas to acknowledge the operation
+// using the Redis `WAIT` command, if `Options.WaitReplicas` is greater than 0. This ensures stronger consistency
+// across distributed Redis instances.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - key: The unique identifier for the cache entry to be marked as deleted.
+//
+// Returns:
+//   - error: If an error occurs during the execution of the Lua script, processing the `WAIT` command,
+//     or if the number of replicas acknowledging the operation is less than `Options.WaitReplicas`, an error is returned.
+//     If cache deletion is disabled, it returns nil.
+//
+// Example:
+//
+//	err := TagAsDeletedSingle(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K")
+//	if err != nil {
+//	    log.Fatalf("Failed to tag cache key as deleted: %v", err)
+//	} else {
+//	    log.Println("Cache key tagged for delayed deletion successfully")
+//	}
 func (c *Cache) TagAsDeletedSingle(ctx context.Context, key string) error {
 	if c.Options.DisableCacheDelete {
 		return nil
@@ -284,6 +328,54 @@ func (c *Cache) TagAsDeletedSingle(ctx context.Context, key string) error {
 	return luaFn(c.client)
 }
 
+// FetchBatch retrieves multiple values from the cache, or if not present, computes them using the provided function `fn`
+// and stores them in the cache. This method handles batch operations, allowing you to fetch or compute multiple values
+// associated with the provided keys at once.
+//
+// The method supports both strong and weak consistency modes, and the choice between them is controlled by the `Options.StrongConsistency`
+// configuration. Additionally, cache reads can be disabled globally through the `Options.DisableCacheRead`.
+//
+// The expiration time for the cache entry is adjusted using the configured `Options.Delay` and `Options.RandomExpireAdjustment`
+// options to help mitigate issues like cache avalanches.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - keys: A slice of strings representing the unique identifiers for the cache entries (e.g., cache keys).
+//   - expire: The duration after which the cache entries will expire and be automatically deleted.
+//   - fn: A function that computes the values to be cached for the keys that are not already present in the cache.
+//     The function receives a slice of indexes corresponding to the keys that need to be computed
+//     and returns a map where the keys are the indexes from the input slice and the values are the
+//     computed byte slices.
+//
+// Returns:
+//   - map[int][]byte: A map where the keys are the indexes of the input keys slice, and the values are the
+//     corresponding data retrieved from the cache or computed by the function `fn`.
+//   - error: If the cache operation or the function `fn` fails, an error is returned.
+//
+// Example:
+//
+//	// Define a function to compute the data for missing keys
+//	fn := func(indexes []int) (map[int][]byte, error) {
+//	    result := make(map[int][]byte)
+//	    for _, idx := range indexes {
+//	        data, err := fetchDataFromDatabase(keys[idx])
+//	        if err != nil {
+//	            return nil, err
+//	        }
+//	        result[idx] = data
+//	    }
+//	    return result, nil
+//	}
+//
+//	// Fetch a batch of Data
+//	batchData, err := FetchBatch(ctx, []string{"user_01J4YHWG45SC7VW684TZB2SZ7K", "user_01J4YJESQBVN1CPV9EPWJJFJ7V"}, 10*time.Minute, fn)
+//	if err != nil {
+//	    log.Fatalf("Failed to fetch batch data: %v", err)
+//	}
+//
+//	for idx, val := range data {
+//	    log.Printf("Fetched data for key[%d]: %s", idx, string(val))
+//	}
 func (c *Cache) FetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
 	if c.Options.DisableCacheRead {
 		return fn(c.keysIndex(keys))
@@ -293,6 +385,35 @@ func (c *Cache) FetchBatch(ctx context.Context, keys []string, expire time.Durat
 	return c.weakFetchBatch(ctx, keys, expire, fn)
 }
 
+// TagAsDeletedBatch marks multiple cache entries as deleted by setting a delayed deletion in Redis.
+// The actual deletion is performed using a Lua script that delays the removal by the duration specified
+// in the `Options.Delay` field. This is useful for scenarios where you want to invalidate multiple cache entries
+// without immediately removing them, allowing other systems to recognize the deletion and take appropriate action.
+//
+// If cache deletion is disabled using `Options.DisableCacheDelete`, the method returns immediately without
+// performing any operation.
+//
+// The method also supports waiting for a specified number of replicas to acknowledge the operation
+// using the Redis `WAIT` command, if `Options.WaitReplicas` is greater than 0. This ensures stronger consistency
+// across distributed Redis instances.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - keys: A slice of strings representing the unique identifiers for the cache entries to be marked as deleted.
+//
+// Returns:
+//   - error: If an error occurs during the execution of the Lua script, processing the `WAIT` command,
+//     or if the number of replicas acknowledging the operation is less than `WaitReplicas`, an error is returned.
+//     If cache deletion is disabled, it returns nil.
+//
+// Example:
+//
+//	err := cache.TagAsDeletedBatch(ctx, []string{"user_01J4YHWG45SC7VW684TZB2SZ7K", "user_01J4YJESQBVN1CPV9EPWJJFJ7V"})
+//	if err != nil {
+//	    log.Fatalf("Failed to tag cache keys as deleted: %v", err)
+//	} else {
+//	    log.Println("Cache keys tagged for delayed deletion successfully")
+//	}
 func (c *Cache) TagAsDeletedBatch(ctx context.Context, keys []string) error {
 	if c.Options.DisableCacheDelete {
 		return nil
@@ -319,10 +440,55 @@ func (c *Cache) TagAsDeletedBatch(ctx context.Context, keys []string) error {
 	return luaFn(c.client)
 }
 
+// RawGet directly retrieves the value of a specific cache entry from a Redis hash by its key.
+// This method bypasses any locking mechanisms, meaning it can read data that might currently be locked for updates.
+//
+// Warning:
+// Use caution when using `RawGet`, as it does not respect any locks that may be in place on the cache entry.
+// This could lead to reading stale or inconsistent data if another process is currently updating the value.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - key: The unique identifier for the cache entry (e.g., the Redis hash key).
+//
+// Returns:
+//   - string: The value associated with the given key in the Redis hash.
+//   - error: If an error occurs during the retrieval process, it is returned.
+//
+// Example:
+//
+//	value, err := RawGet(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K")
+//	if err != nil {
+//	    log.Fatalf("Failed to retrieve cache key: %v", err)
+//	}
+//	log.Printf("Retrieved value: %s", value)
 func (c *Cache) RawGet(ctx context.Context, key string) (string, error) {
 	return c.client.HGet(ctx, key, "value").Result()
 }
 
+// RawSet directly stores a value in a specific cache entry in a Redis hash and sets an expiration time for the entry.
+// This method bypasses any locking mechanisms, meaning it can overwrite data that might currently be locked for updates.
+//
+// Warning:
+// Use caution when using `RawSet`, as it does not respect any locks that may be in place on the cache entry.
+// This could lead to race conditions or overwriting data that is currently being updated by another process.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - key: The unique identifier for the cache entry (e.g., the Redis hash key).
+//   - value: The value to be stored in the "value" field of the Redis hash.
+//   - expire: The duration after which the cache entry will expire and be automatically deleted.
+//
+// Returns:
+//   - error: If an error occurs during the storage or expiration process, it is returned.
+//
+// Example:
+//
+//	err := RawSet(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K", []byte("example_value"), 10*time.Minute)
+//	if err != nil {
+//	    log.Fatalf("Failed to set cache key: %v", err)
+//	}
+//	log.Println("Cache key set successfully")
 func (c *Cache) RawSet(ctx context.Context, key string, value []byte, expire time.Duration) error {
 	err := c.client.HSet(ctx, key, "value", value).Err()
 	if err == nil {
@@ -332,6 +498,28 @@ func (c *Cache) RawSet(ctx context.Context, key string, value []byte, expire tim
 	return err
 }
 
+// LockForUpdate attempts to acquire a lock on a cache entry for a specific owner, allowing
+// the owner to perform updates without interference. The lock is implemented using a Lua script
+// that sets a lock with a very high expiration time (`math.Pow10(10)`).
+//
+// If the lock is already held by another owner, the method returns an error indicating
+// the key is locked by someone else.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - key: The unique identifier for the cache entry (e.g., the Redis key to be locked).
+//   - owner: A string representing the entity (e.g., a unique identifier) that requests the lock.
+//
+// Returns:
+//   - error: If an error occurs during the locking process or if the lock is already held by another owner, it is returned.
+//
+// Example:
+//
+//	err := LockForUpdate(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K", "service_01J4ZXVMKDFTSZGYKT5FXAZAB4")
+//	if err != nil {
+//	    log.Fatalf("Failed to lock cache key: %v", err)
+//	}
+//	log.Println("Cache key locked for update")
 func (c *Cache) LockForUpdate(ctx context.Context, key string, owner string) error {
 	lockUntil := math.Pow10(10)
 	res, err := runLua(ctx, c.client, lock, []string{key}, []interface{}{owner, lockUntil})
@@ -341,6 +529,25 @@ func (c *Cache) LockForUpdate(ctx context.Context, key string, owner string) err
 	return err
 }
 
+// UnlockForUpdate releases a lock on a cache entry for a specific owner, allowing other entities
+// to acquire the lock. The lock is removed using a Lua script that checks the ownership
+// and then releases the lock if the owner matches.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - key: The unique identifier for the cache entry (e.g., the Redis key to be unlocked).
+//   - owner: A string representing the entity (e.g., a unique identifier) that currently holds the lock.
+//
+// Returns:
+//   - error: If an error occurs during the unlocking process, it is returned.
+//
+// Example:
+//
+//	err := UnlockForUpdate(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K", "service_01J4ZXVMKDFTSZGYKT5FXAZAB4")
+//	if err != nil {
+//	    log.Fatalf("Failed to unlock cache key: %v", err)
+//	}
+//	log.Println("Cache key unlocked for update")
 func (c *Cache) UnlockForUpdate(ctx context.Context, key string, owner string) error {
 	_, err := runLua(ctx, c.client, unlock, []string{key}, []interface{}{owner, c.Options.LockExpire / time.Second})
 	return err
