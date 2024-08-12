@@ -1,4 +1,4 @@
-package zencache
+package resilicache
 
 import (
 	"context"

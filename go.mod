@@ -1,4 +1,4 @@
-module github.com/driftdev/zencache
+module github.com/driftdev/resilicache
 
 go 1.22.6
 
