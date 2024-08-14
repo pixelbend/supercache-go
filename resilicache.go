@@ -440,32 +440,6 @@ func (c *Cache) TagAsDeletedBatch(ctx context.Context, keys []string) error {
 	return luaFn(c.client)
 }
 
-// RawGet directly retrieves the value of a specific cache entry from a Redis hash by its key.
-// This method bypasses any locking mechanisms, meaning it can read data that might currently be locked for updates.
-//
-// Warning:
-// Use caution when using `RawGet`, as it does not respect any locks that may be in place on the cache entry.
-// This could lead to reading stale or inconsistent data if another process is currently updating the value.
-//
-// Parameters:
-//   - ctx: The context to control cancellation and timeouts.
-//   - key: The unique identifier for the cache entry (e.g., the Redis hash key).
-//
-// Returns:
-//   - string: The value associated with the given key in the Redis hash.
-//   - error: If an error occurs during the retrieval process, it is returned.
-//
-// Example:
-//
-//	value, err := RawGet(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K")
-//	if err != nil {
-//	    log.Fatalf("Failed to retrieve cache key: %v", err)
-//	}
-//	log.Printf("Retrieved value: %s", value)
-func (c *Cache) RawGet(ctx context.Context, key string) ([]byte, error) {
-	return c.client.HGet(ctx, key, "value").Bytes()
-}
-
 // RawSet directly stores a value in a specific cache entry in a Redis hash and sets an expiration time for the entry.
 // This method bypasses any locking mechanisms, meaning it can overwrite data that might currently be locked for updates.
 //
@@ -496,6 +470,32 @@ func (c *Cache) RawSet(ctx context.Context, key string, value []byte, expire tim
 	}
 
 	return err
+}
+
+// RawGet directly retrieves the value of a specific cache entry from a Redis hash by its key.
+// This method bypasses any locking mechanisms, meaning it can read data that might currently be locked for updates.
+//
+// Warning:
+// Use caution when using `RawGet`, as it does not respect any locks that may be in place on the cache entry.
+// This could lead to reading stale or inconsistent data if another process is currently updating the value.
+//
+// Parameters:
+//   - ctx: The context to control cancellation and timeouts.
+//   - key: The unique identifier for the cache entry (e.g., the Redis hash key).
+//
+// Returns:
+//   - string: The value associated with the given key in the Redis hash.
+//   - error: If an error occurs during the retrieval process, it is returned.
+//
+// Example:
+//
+//	value, err := RawGet(ctx, "user_01J4YHWG45SC7VW684TZB2SZ7K")
+//	if err != nil {
+//	    log.Fatalf("Failed to retrieve cache key: %v", err)
+//	}
+//	log.Printf("Retrieved value: %s", value)
+func (c *Cache) RawGet(ctx context.Context, key string) ([]byte, error) {
+	return c.client.HGet(ctx, key, "value").Bytes()
 }
 
 // LockForUpdate attempts to acquire a lock on a cache entry for a specific owner, allowing
