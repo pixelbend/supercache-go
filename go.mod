@@ -1,6 +1,6 @@
 module github.com/driftdev/resilicache
 
-go 1.22.6
+go 1.23.0
 
 require (
 	github.com/lithammer/shortuuid v3.0.0+incompatible
