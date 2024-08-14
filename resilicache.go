@@ -462,8 +462,8 @@ func (c *Cache) TagAsDeletedBatch(ctx context.Context, keys []string) error {
 //	    log.Fatalf("Failed to retrieve cache key: %v", err)
 //	}
 //	log.Printf("Retrieved value: %s", value)
-func (c *Cache) RawGet(ctx context.Context, key string) (string, error) {
-	return c.client.HGet(ctx, key, "value").Result()
+func (c *Cache) RawGet(ctx context.Context, key string) ([]byte, error) {
+	return c.client.HGet(ctx, key, "value").Bytes()
 }
 
 // RawSet directly stores a value in a specific cache entry in a Redis hash and sets an expiration time for the entry.
