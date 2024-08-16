@@ -1,4 +1,4 @@
-module github.com/driftdev/resilicache
+module github.com/driftdev/resilicache-go
 
 go 1.23.0
 
