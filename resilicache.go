@@ -123,8 +123,8 @@ type Cache struct {
 // If Delay or LockExpire is not properly set (i.e., is 0), the function will terminate with a fatal error,
 // ensuring that these essential configuration values are provided.
 func NewCache(cache redis.UniversalClient, options Options) *Cache {
-	if options.Delay == 0 || options.LockExpire == 0 {
-		log.Fatal("cache options error: Delay and LockExpire should not be 0, you should call NewDefaultOptions() to get default options")
+	if options.Delay <= 0 || options.LockExpire <= 0 {
+		log.Fatalf("resilicache options error: Delay and LockExpire must be greater than 0. you should call NewDefaultOptions() to get default options")
 	}
 	return &Cache{
 		client:  cache,
