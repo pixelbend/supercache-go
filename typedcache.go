@@ -206,7 +206,7 @@ func (tc *TypedCache[T]) TagAsDeletedSingle(ctx context.Context, key string) err
 // Example:
 // To fetch or generate multiple string values:
 //
-//	values, err := FetchBatch(ctx, []string{"key1", "key2"}, 10*time.Minute, func(indexes []int) (map[int]string, error) {
+//	values, err := FetchBatch(ctx, []string{"key1", "key2"}, 10*time.Minute, func(idxs []int) (map[int]string, error) {
 //	    return map[int]string{
 //	        indexes[0]: "generated_value1",
 //	        indexes[1]: "generated_value2",
@@ -216,7 +216,7 @@ func (tc *TypedCache[T]) TagAsDeletedSingle(ctx context.Context, key string) err
 //	    log.Fatalf("Failed to fetch batch cache: %v", err)
 //	}
 //	log.Printf("Fetched or generated values: %v", values)
-func (tc *TypedCache[T]) FetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int]T, error)) (map[int]T, error) {
+func (tc *TypedCache[T]) FetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(idxs []int) (map[int]T, error)) (map[int]T, error) {
 	fetchBatchFn := func(indexes []int) (map[int][]byte, error) {
 		result, err := fn(indexes)
 		if err != nil {

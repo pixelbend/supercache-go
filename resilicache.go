@@ -355,9 +355,9 @@ func (c *Cache) TagAsDeletedSingle(ctx context.Context, key string) error {
 // Example:
 //
 //	// Define a function to compute the data for missing keys
-//	fn := func(indexes []int) (map[int][]byte, error) {
+//	fn := func(idxs []int) (map[int][]byte, error) {
 //	    result := make(map[int][]byte)
-//	    for _, idx := range indexes {
+//	    for _, idx := range idxs {
 //	        data, err := fetchDataFromDatabase(keys[idx])
 //	        if err != nil {
 //	            return nil, err
@@ -376,7 +376,7 @@ func (c *Cache) TagAsDeletedSingle(ctx context.Context, key string) error {
 //	for idx, val := range data {
 //	    log.Printf("Fetched data for key[%d]: %s", idx, string(val))
 //	}
-func (c *Cache) FetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
+func (c *Cache) FetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(idxs []int) (map[int][]byte, error)) (map[int][]byte, error) {
 	if c.Options.DisableCacheRead {
 		return fn(c.keysIndex(keys))
 	} else if c.Options.StrongConsistency {
@@ -655,15 +655,15 @@ func (c *Cache) luaSetBatch(ctx context.Context, keys []string, values [][]byte,
 	return err
 }
 
-func (c *Cache) fetchBatch(ctx context.Context, keys []string, indexes []int, expire time.Duration, owner string, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
+func (c *Cache) fetchBatch(ctx context.Context, keys []string, idxs []int, expire time.Duration, owner string, fn func(idxs []int) (map[int][]byte, error)) (map[int][]byte, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			debug.PrintStack()
 		}
 	}()
-	data, err := fn(indexes)
+	data, err := fn(idxs)
 	if err != nil {
-		for _, idx := range indexes {
+		for _, idx := range idxs {
 			_ = c.UnlockForUpdate(ctx, keys[idx], owner)
 		}
 		return nil, err
@@ -677,7 +677,7 @@ func (c *Cache) fetchBatch(ctx context.Context, keys []string, indexes []int, ex
 	var batchValues [][]byte
 	var batchExpires []int
 
-	for _, idx := range indexes {
+	for _, idx := range idxs {
 		v := data[idx]
 		ex := expire - c.Options.Delay - time.Duration(rand.Float64()*c.Options.RandomExpireAdjustment*float64(expire))
 		if v == nil {
@@ -712,7 +712,7 @@ type pair struct {
 	err  error
 }
 
-func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
+func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(idxs []int) (map[int][]byte, error)) (map[int][]byte, error) {
 	var result = make(map[int][]byte)
 	owner := shortuuid.New()
 	var toGet, toFetch, toFetchAsync []int
@@ -743,8 +743,8 @@ func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.D
 	}
 
 	if len(toFetchAsync) > 0 {
-		go func(indexes []int) {
-			_, _ = c.fetchBatch(ctx, keys, indexes, expire, owner, fn)
+		go func(idxs []int) {
+			_, _ = c.fetchBatch(ctx, keys, idxs, expire, owner, fn)
 		}(toFetchAsync)
 		toFetchAsync = toFetchAsync[:0] // reset toFetch
 	}
@@ -817,8 +817,8 @@ func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.D
 	}
 
 	if len(toFetchAsync) > 0 {
-		go func(indexes []int) {
-			_, _ = c.fetchBatch(ctx, keys, indexes, expire, owner, fn)
+		go func(idxs []int) {
+			_, _ = c.fetchBatch(ctx, keys, idxs, expire, owner, fn)
 		}(toFetchAsync)
 	}
 
@@ -836,7 +836,7 @@ func (c *Cache) weakFetchBatch(ctx context.Context, keys []string, expire time.D
 	return result, nil
 }
 
-func (c *Cache) strongFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(indexes []int) (map[int][]byte, error)) (map[int][]byte, error) {
+func (c *Cache) strongFetchBatch(ctx context.Context, keys []string, expire time.Duration, fn func(idxs []int) (map[int][]byte, error)) (map[int][]byte, error) {
 	var result = make(map[int][]byte)
 	owner := shortuuid.New()
 	var toGet, toFetch []int
