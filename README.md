@@ -22,7 +22,7 @@ It provides a comprehensive set of features to enhance the reliability and perfo
 To install ResiliCache Go, use the following command:
 
 ```bash
-go get github.com/driftdev/resilicache-go
+go get github.com/teapartydev/resilicache-go
 ```
 
 ## Usage
@@ -35,7 +35,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/driftdev/resilicache-go"
+	"github.com/teapartydev/resilicache-go"
 	"github.com/redis/go-redis/v9"
 	"log"
 	"time"
