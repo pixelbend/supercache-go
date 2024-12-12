@@ -1,4 +1,4 @@
-module github.com/teapartydev/resilicache-go
+module github.com/codefrantic/resilicache-go
 
 go 1.23.0
 
