@@ -1,4 +1,4 @@
-module github.com/codefrantic/resilicache-go
+module github.com/pixelbend/resilicache-go
 
 go 1.23.0
 
