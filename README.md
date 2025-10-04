@@ -1,6 +1,6 @@
-# ResiliCache Go
+# SuperCache Go
 
-ResiliCache Go is a robust and versatile caching package for Go, compatible with various caching systems, including Redis, RedisCluster, ValKey, KeyDB, DragonflyDB, and Kvrocks. 
+SuperCache Go is a robust and versatile caching package for Go, compatible with various caching systems, including Redis, RedisCluster, ValKey, KeyDB, DragonflyDB, and Kvrocks. 
 It provides a comprehensive set of features to enhance the reliability and performance of your caching strategy.
 
 ## Features
@@ -19,15 +19,15 @@ It provides a comprehensive set of features to enhance the reliability and perfo
 
 ## Installation
 
-To install ResiliCache Go, use the following command:
+To install SuperCache Go, use the following command:
 
 ```bash
-go get github.com/pixelbend/resilicache-go
+go get github.com/pixelbend/supercache-go
 ```
 
 ## Usage
 
-Here's a basic examples of how to use ResiliCache Go.
+Here's a basic examples of how to use SuperCache Go.
  
 ```go
 package main
@@ -35,7 +35,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/pixelbend/resilicache-go"
+	"github.com/pixelbend/supercache-go"
 	"github.com/redis/go-redis/v9"
 	"log"
 	"time"
@@ -54,8 +54,8 @@ func main() {
 		log.Fatalf("Error flushing DB: %v", err)
 	}
 
-	// Initialize ResiliCache with Redis client and default options
-	cache := resilicache.NewCache(rdb, resilicache.NewDefaultOptions())
+	// Initialize SuperCache with Redis client and default options
+	cache := supercache.NewCache(rdb, resilicache.NewDefaultOptions())
 
 	// Set a key-value pair in the cache with a TTL of 10 seconds
 	err := cache.Set(context.Background(), "user:01J61BPPHMFH9VSF2T1R2ZXDA2", []byte("tester"), time.Second*10)
